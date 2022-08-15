@@ -489,6 +489,12 @@ impl IndexConstraintUsage<'_> {
         self.0.argvIndex = argv_index;
     }
 
+    /// Get this usage's argv index.
+    #[inline]
+    pub fn argv_index(&self) -> c_int {
+        self.0.argvIndex
+    }
+
     /// if `omit`, do not code a test for this constraint
     #[inline]
     pub fn set_omit(&mut self, omit: bool) {
