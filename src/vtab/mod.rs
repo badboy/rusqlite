@@ -384,6 +384,22 @@ impl IndexInfo {
         }
     }
 
+    /// Set to a pointer obtained from [`ffi::sqlite3_malloc`].
+    #[inline]
+    pub fn set_idxstr(&mut self, ptr: *mut u8) {
+        unsafe {
+            (*self.0).idxStr = ptr as *mut _;
+        }
+    }
+
+    /// If `true` instructs SQLite to free `idxStr` using [`ffi::sqlite3_free`].
+    #[inline]
+    pub fn set_need_to_free_idxstr(&mut self, need_to_free: bool) {
+        unsafe {
+            (*self.0).needToFreeIdxStr = if need_to_free { 1 } else { 0 };
+        }
+    }
+
     /// Estimated cost of using this index
     #[inline]
     pub fn set_estimated_cost(&mut self, estimated_ost: f64) {
@@ -558,7 +574,7 @@ impl OrderBy<'_> {
 pub unsafe trait VTabCursor: Sized {
     /// Begin a search of a virtual table.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xfilter_method))
-    fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Values<'_>) -> Result<()>;
+    fn filter(&mut self, idx_num: c_int, idx_str: *const u8, args: &Values<'_>) -> Result<()>;
     /// Advance cursor to the next row of a result set initiated by
     /// [`filter`](VTabCursor::filter). (See [SQLite doc](https://sqlite.org/vtab.html#the_xnext_method))
     fn next(&mut self) -> Result<()>;
@@ -1007,18 +1023,10 @@ unsafe extern "C" fn rust_filter<C>(
 where
     C: VTabCursor,
 {
-    use std::ffi::CStr;
-    use std::str;
-    let idx_name = if idx_str.is_null() {
-        None
-    } else {
-        let c_slice = CStr::from_ptr(idx_str).to_bytes();
-        Some(str::from_utf8_unchecked(c_slice))
-    };
     let args = slice::from_raw_parts_mut(argv, argc as usize);
     let values = Values { args };
     let cr = cursor as *mut C;
-    cursor_error(cursor, (*cr).filter(idx_num, idx_name, &values))
+    cursor_error(cursor, (*cr).filter(idx_num, idx_str as *const u8, &values))
 }
 
 unsafe extern "C" fn rust_next<C>(cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int
